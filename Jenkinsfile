@@ -75,6 +75,7 @@ pipeline {
                 appImage = ''
                 mavenPomVersion = ''
                 isSnapshotVersion = false
+                registryUrl = ''
             }
 
             stages {
@@ -92,8 +93,12 @@ pipeline {
                             mavenPomVersion = getPomVersion()
                             echo "Maven version is ${mavenPomVersion}"
                             echo 'Creating docker image'
-                            withDockerRegistry(credentialsId: 'Deployer', url: "${env.DOCKER_RELEASE_REGISTRY_URL}") {
-				    	        appImage = docker.build("${env.DOCKER_RELEASE_REGISTRY}/apps/k-ci-sample:${mavenPomVersion.toLowerCase()}")
+                            isSnapshotVersion = mavenPomVersion.toLowerCase().contains('snapshot')
+                            registryUrl = isSnapshotVersion ? env.DOCKER_SNAPSHOTS_REGISTRY_URL : env.DOCKER_RELEASE_REGISTRY_URL
+                            echo 'Building image with target URL ${registryUrl}'
+                            def registryPrefix = isSnapshotVersion ? env.DOCKER_SNAPSHOTS_REGISTRY : env.DOCKER_RELEASE_REGISTRY
+                            withDockerRegistry(credentialsId: 'Deployer', url: registryUrl) {
+				    	        appImage = docker.build("${registryPrefix}/apps/k-ci-sample:${mavenPomVersion.toLowerCase()}")
 						    }
 	                    }
                     }
@@ -102,7 +107,7 @@ pipeline {
        				steps {
        					script {
 							echo 'Publishing docker image'
-       				        withDockerRegistry(credentialsId: 'Deployer', url: "${env.DOCKER_RELEASE_REGISTRY_URL}") {
+       				        withDockerRegistry(credentialsId: 'Deployer', url: registryUrl) {
 				    	        appImage.push()
 				    	        appImage.push('latest')
 						    }           
@@ -156,3 +161,4 @@ def getPomVersion() {
         return pVersion.getParent().getVersion().trim()
 	}    
 }
+
